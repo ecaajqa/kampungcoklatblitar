@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="id" class="h-full scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kampung Coklat Blitar - Wisata Edukasi Coklat</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;800&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+    
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase Configuration
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'kampung-coklat-blitar';
+
+        // Global State
+        let currentUser = null;
+
+        // Initialization
+        window.onload = async () => {
+            lucide.createIcons();
+            
+            // Auth Logic
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+
+            onAuthStateChanged(auth, (user) => {
+                currentUser = user;
+                if (user) {
+                    loadReviews();
+                }
+            });
+        };
+
+        // Review Functionality
+        const reviewForm = document.getElementById('review-form');
+        let selectedRating = 0;
+
+        // Star Rating Logic
+        document.querySelectorAll('.star-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                selectedRating = parseInt(btn.dataset.rating);
+                updateStars(selectedRating);
+            });
+        });
+
+        function updateStars(rating) {
+            document.querySelectorAll('.star-btn').forEach((b, i) => {
+                const icon = b.querySelector('i');
+                if (i < rating) {
+                    b.classList.add('text-choco-gold');
+                    b.classList.remove('text-choco-light/50');
+                } else {
+                    b.classList.remove('text-choco-gold');
+                    b.classList.add('text-choco-light/50');
+                }
+            });
+        }
+
+        reviewForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!currentUser) return;
+            if (selectedRating === 0) {
+                showToast("Silakan pilih rating terlebih dahulu", "error");
+                return;
+            }
+
+            const name = document.getElementById('review-name').value;
+            const message = document.getElementById('review-msg').value;
+            const submitBtn = document.getElementById('review-submit');
+
+            try {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = "Mengirim...";
+
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'reviews'), {
+                    name,
+                    rating: selectedRating,
+                    message,
+                    timestamp: serverTimestamp(),
+                    userId: currentUser.uid
+                });
+
+                reviewForm.reset();
+                selectedRating = 0;
+                updateStars(0);
+                showToast("Ulasan berhasil dikirim! Terima kasih.");
+            } catch (error) {
+                console.error("Error adding review: ", error);
+                showToast("Gagal mengirim ulasan.", "error");
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i data-lucide="send" style="width:18px;height:18px"></i> Kirim Ulasan';
+                lucide.createIcons();
+            }
+        });
+
+        function loadReviews() {
+            const q = collection(db, 'artifacts', appId, 'public', 'data', 'reviews');
+            onSnapshot(q, (snapshot) => {
+                const reviewsList = document.getElementById('reviews-list');
+                if (snapshot.empty) {
+                    reviewsList.innerHTML = '<p class="text-choco-cream/70 text-center">Belum ada ulasan. Jadilah yang pertama!</p>';
+                    return;
+                }
+
+                let html = '<div class="grid md:grid-cols-2 gap-4">';
+                snapshot.docs.forEach(doc => {
+                    const data = doc.data();
+                    const stars = '★'.repeat(data.rating) + '☆'.repeat(5 - data.rating);
+                    html += `
+                        <div class="bg-choco-mid/30 p-5 rounded-xl border border-choco-light/20">
+                            <div class="flex justify-between items-start mb-2">
+                                <h4 class="font-bold text-choco-cream">${data.name}</h4>
+                                <span class="text-choco-gold">${stars}</span>
+                            </div>
+                            <p class="text-choco-cream/80 text-sm italic">"${data.message}"</p>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                reviewsList.innerHTML = html;
+            }, (error) => {
+                console.error("Listener error:", error);
+            });
+        }
+    </script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'choco-dark': '#3E2723',
+                        'choco-mid': '#5D4037',
+                        'choco-light': '#8D6E63',
+                        'choco-cream': '#D7CCC8',
+                        'choco-pale': '#EFEBE9',
+                        'choco-gold': '#F9A825'
+                    },
+                    fontFamily: {
+                        'display': ['Playfair Display', 'serif'],
+                        'body': ['Lato', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .hero-bg { background: linear-gradient(rgba(62,39,35,0.6), rgba(62,39,35,0.8)), url('https://img.okezone.com/content/2020/11/04/408/2303772/melihat-wisata-kampung-cokelat-blitar-yang-mulai-menggeliat-aPaWWYSOlZ.JPG') center/cover no-repeat; }
+        .gallery-item:hover .gallery-overlay { opacity: 1; }
+        .fade-in { animation: fadeIn 0.8s ease forwards; opacity: 0; }
+        @keyframes fadeIn { to { opacity: 1; } }
+        .modal-backdrop { background: rgba(62,39,35,0.9); }
+        .toast-show { animation: slideUp 0.4s ease forwards; }
+        @keyframes slideUp { from { transform: translate(-50%, 100px); opacity:0; } to { transform: translate(-50%, 0); opacity:1; } }
+    </style>
+</head>
+<body class="h-full bg-choco-pale font-body text-choco-dark">
+
+    <!-- Navigation -->
+    <nav class="fixed top-0 left-0 w-full bg-choco-dark/95 backdrop-blur-sm z-50 shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <img src="https://kampungcoklat.id/wp-content/uploads/2023/01/cropped-download-removebg-preview.png" alt="Logo" class="w-10 h-10 rounded-full object-cover">
+                <span class="font-display text-xl font-bold text-choco-cream">Kampung Coklat</span>
+            </div>
+            <div class="hidden md:flex gap-6 text-choco-cream text-sm font-medium">
+                <a href="#beranda" class="hover:text-choco-gold transition">Beranda</a>
+                <a href="#tentang" class="hover:text-choco-gold transition">Tentang</a>
+                <a href="#dokumentasi" class="hover:text-choco-gold transition">Dokumentasi</a>
+                <a href="#tiket" class="hover:text-choco-gold transition">Tiket</a>
+                <a href="#ulasan" class="hover:text-choco-gold transition">Ulasan</a>
+            </div>
+            <button id="mobile-menu-btn" class="md:hidden text-choco-cream"><i data-lucide="menu"></i></button>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section id="beranda" class="hero-bg w-full min-h-screen flex items-center justify-center text-center px-4">
+        <div class="fade-in">
+            <img src="https://kampungcoklat.id/wp-content/uploads/2023/01/cropped-download-removebg-preview.png" alt="Logo" class="w-32 h-32 rounded-full mx-auto mb-8 border-4 border-choco-gold shadow-2xl">
+            <h1 class="font-display text-5xl md:text-7xl font-bold text-white mb-6">Nikmati Kelezatan Coklat Asli Blitar</h1>
+            <p class="text-choco-cream text-xl md:text-2xl max-w-3xl mx-auto mb-10 leading-relaxed">Rasakan pengalaman edukasi pengolahan kakao di destinasi wisata favorit keluarga Indonesia.</p>
+            <a href="#tiket" class="inline-block bg-choco-gold text-choco-dark font-extrabold px-10 py-4 rounded-full hover:bg-yellow-500 transition-all transform hover:scale-105 shadow-xl">PESAN TIKET SEKARANG</a>
+        </div>
+    </section>
+
+    <!-- Tentang Section -->
+    <section id="tentang" class="py-24 px-4">
+        <div class="max-w-6xl mx-auto">
+            <div class="grid md:grid-cols-2 gap-16 items-center">
+                <div class="order-2 md:order-1">
+                    <h2 class="font-display text-4xl font-bold mb-6">Warisan Coklat Blitar</h2>
+                    <p class="text-choco-mid mb-6 text-lg">Sejak 2005, Kampung Coklat telah menjadi pusat edukasi kakao terbesar di Jawa Timur. Kami berkomitmen untuk memperkenalkan proses pengolahan coklat dari hulu ke hilir kepada generasi muda.</p>
+                    <div class="grid grid-cols-2 gap-6">
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border-l-4 border-choco-gold">
+                            <p class="text-3xl font-bold text-choco-dark">50+</p>
+                            <p class="text-sm text-choco-light">Varian Produk</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border-l-4 border-choco-gold">
+                            <p class="text-3xl font-bold text-choco-dark">1jt+</p>
+                            <p class="text-sm text-choco-light">Pengunjung/Thn</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="order-1 md:order-2 grid grid-cols-2 gap-4">
+                    <img src="https://asset-2.tstatic.net/travel/foto/bank/images/Wisata-Kampung-Coklat-Blitar.jpg" class="rounded-2xl shadow-lg h-64 w-full object-cover" alt="Suasana Wisata">
+                    <img src="https://jejakpiknik.com/wp-content/uploads/2019/09/spot-foto-kampung-coklat.jpg" class="rounded-2xl shadow-lg h-64 w-full object-cover mt-8" alt="Spot Foto">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tiket Section (Google Form Integration) -->
+    <section id="tiket" class="py-24 px-4 bg-choco-cream/30">
+        <div class="max-w-4xl mx-auto text-center">
+            <h2 class="font-display text-4xl font-bold mb-4">Pemesanan Tiket Online</h2>
+            <div class="w-24 h-1 bg-choco-gold mx-auto mb-8 rounded-full"></div>
+            <p class="text-choco-mid mb-12 max-w-2xl mx-auto">Silakan isi formulir di bawah ini untuk memesan tiket kunjungan Anda. Tim kami akan segera menghubungi Anda melalui email atau WhatsApp untuk konfirmasi.</p>
+            
+            <!-- Google Form Embed -->
+            <div class="bg-white rounded-3xl shadow-2xl overflow-hidden border-4 border-white">
+                <div class="relative w-full h-[800px]">
+                    <!-- Loading state for iframe -->
+                    <div class="absolute inset-0 flex items-center justify-center bg-choco-pale animate-pulse -z-10">
+                        <p class="text-choco-mid font-bold">Memuat Formulir...</p>
+                    </div>
+                    <iframe src="https://forms.gle/ph8wsCvHWyvYJfwd8" width="100%" height="100%" frameborder="0" marginheight="0" marginwidth="0" class="rounded-2xl">Memuat…</iframe>
+                </div>
+            </div>
+            
+            <div class="mt-8 flex flex-wrap justify-center gap-4 text-sm font-bold text-choco-dark">
+                <span class="flex items-center gap-2 bg-white px-4 py-2 rounded-full shadow-sm">
+                    <i data-lucide="info" class="w-4 h-4 text-choco-gold"></i> Harga Tiket Mulai Rp 15.000
+                </span>
+                <span class="flex items-center gap-2 bg-white px-4 py-2 rounded-full shadow-sm">
+                    <i data-lucide="clock" class="w-4 h-4 text-choco-gold"></i> Buka Setiap Hari
+                </span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Dokumentasi Section -->
+    <section id="dokumentasi" class="py-24 px-4">
+        <div class="max-w-7xl mx-auto">
+            <h2 class="font-display text-4xl font-bold text-center mb-16">Galeri Kenangan</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="gallery-container">
+                <!-- Images will be added via script or static -->
+            </div>
+        </div>
+    </section>
+
+    <!-- Ulasan Section -->
+    <section id="ulasan" class="py-24 px-4 bg-choco-dark text-white">
+        <div class="max-w-5xl mx-auto">
+            <h2 class="font-display text-4xl font-bold text-center mb-4">Ulasan Pengunjung</h2>
+            <div id="reviews-list" class="min-h-[100px] mb-16"></div>
+
+            <div class="bg-choco-mid p-8 md:p-12 rounded-3xl shadow-2xl border border-choco-light/30">
+                <h3 class="font-display text-2xl font-bold mb-8 text-choco-gold">Tulis Ulasan Anda</h3>
+                <form id="review-form" class="space-y-6">
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Nama Lengkap</label>
+                            <input type="text" id="review-name" required class="w-full px-5 py-4 bg-choco-dark/50 border border-choco-light/30 rounded-xl outline-none focus:ring-2 focus:ring-choco-gold transition">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2 text-choco-gold">Rating Pengalaman</label>
+                            <div class="flex gap-2 py-3">
+                                <button type="button" class="star-btn text-choco-light/50 transition transform hover:scale-110" data-rating="1"><i data-lucide="star"></i></button>
+                                <button type="button" class="star-btn text-choco-light/50 transition transform hover:scale-110" data-rating="2"><i data-lucide="star"></i></button>
+                                <button type="button" class="star-btn text-choco-light/50 transition transform hover:scale-110" data-rating="3"><i data-lucide="star"></i></button>
+                                <button type="button" class="star-btn text-choco-light/50 transition transform hover:scale-110" data-rating="4"><i data-lucide="star"></i></button>
+                                <button type="button" class="star-btn text-choco-light/50 transition transform hover:scale-110" data-rating="5"><i data-lucide="star"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Ceritakan Pengalaman Anda</label>
+                        <textarea id="review-msg" rows="4" required class="w-full px-5 py-4 bg-choco-dark/50 border border-choco-light/30 rounded-xl outline-none focus:ring-2 focus:ring-choco-gold transition resize-none"></textarea>
+                    </div>
+                    <button type="submit" id="review-submit" class="w-full bg-choco-gold text-choco-dark font-bold py-4 rounded-xl hover:bg-yellow-500 transition flex items-center justify-center gap-3">
+                        <i data-lucide="send" style="width:20px;height:20px"></i> KIRIM ULASAN
+                    </button>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-choco-dark text-choco-cream/60 py-16 px-4 border-t border-choco-mid">
+        <div class="max-w-7xl mx-auto grid md:grid-cols-4 gap-12">
+            <div class="col-span-1 md:col-span-2">
+                <div class="flex items-center gap-3 mb-6">
+                    <img src="https://kampungcoklat.id/wp-content/uploads/2023/01/cropped-download-removebg-preview.png" class="w-12 h-12 rounded-full" alt="Logo">
+                    <span class="font-display text-2xl font-bold text-choco-cream">Kampung Coklat</span>
+                </div>
+                <p class="max-w-md leading-relaxed">Destinasi wisata edukasi kebanggaan warga Blitar. Nikmati keindahan perkebunan kakao dan kelezatan coklat murni dalam satu tempat.</p>
+            </div>
+            <div>
+                <h4 class="font-bold text-white mb-6">Lokasi</h4>
+                <p>Jl. Banteng - Blorok No. 18, Desa Plosorejo, Kec. Kademangan, Blitar, Jawa Timur.</p>
+            </div>
+            <div>
+                <h4 class="font-bold text-white mb-6">Hubungi Kami</h4>
+                <p>WA: 0812-3456-7890</p>
+                <p>Email: info@kampungcoklat.id</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Toast Component -->
+    <div id="toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 px-8 py-4 rounded-2xl shadow-2xl z-[1000] hidden font-bold text-white transition-all"></div>
+
+    <script>
+        // Gallery Rendering
+        const images = [
+            'https://asset-2.tstatic.net/travel/foto/bank/images/Wisata-Kampung-Coklat-Blitar.jpg',
+            'https://jejakpiknik.com/wp-content/uploads/2019/09/spot-foto-kampung-coklat.jpg',
+            'https://jelajahblitar.com/wp-content/uploads/2018/05/Minuman-Khas-Kampung-Coklat.jpg',
+            'https://travelspromo.com/wp-content/uploads/2019/04/Perahu-di-Kampung-Coklat-Haykal-Haydn-768x576.jpg',
+            'https://imgcdn.espos.id/@espos/images/2024/02/coklat-2.jpeg',
+            'https://down-id.img.susercontent.com/file/7a20cb7d6eb67cc5e5478281e5ae2ca3',
+            'https://th.bing.com/th/id/OIP.VY2lLsjppEYSKLYowJdMLwHaFM?o=7&rm=3&rs=1&pid=ImgDetMain',
+            'https://down-id.img.susercontent.com/file/6e4c172cc5a4c8de253e816a733ddffc'
+        ];
+
+        const container = document.getElementById('gallery-container');
+        images.forEach(src => {
+            const div = document.createElement('div');
+            div.className = 'gallery-item relative rounded-2xl overflow-hidden shadow-lg h-64 group cursor-pointer';
+            div.innerHTML = `
+                <img src="${src}" class="w-full h-full object-cover transition duration-500 group-hover:scale-110">
+                <div class="gallery-overlay absolute inset-0 bg-choco-dark/60 opacity-0 transition-opacity flex items-center justify-center">
+                    <i data-lucide="maximize-2" class="text-white w-8 h-8"></i>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+
+        // Toast Helper
+        function showToast(msg, type = "success") {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = `fixed bottom-10 left-1/2 -translate-x-1/2 px-8 py-4 rounded-2xl shadow-2xl z-[1000] font-bold text-white transition-all toast-show ${type === 'success' ? 'bg-green-600' : 'bg-red-600'}`;
+            t.classList.remove('hidden');
+            setTimeout(() => { t.classList.add('hidden'); }, 4000);
+        }
+
+        // Mobile Menu Toggle
+        document.getElementById('mobile-menu-btn').addEventListener('click', () => {
+            // Basic toggle logic if mobile menu items existed in a specific container
+            showToast("Menu seluler diklik", "success");
+        });
+    </script>
+</body>
+</html>
